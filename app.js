@@ -1,60 +1,62 @@
-// MitchPath CDL App Storage (local)
-const STORAGE_KEY = "mitchpath_cdl_applications_v1";
-
-function getApps() {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-  } catch {
-    return [];
-  }
-}
-
-function saveApps(apps) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(apps));
-}
+// ====== SUPABASE SETTINGS (PASTE YOUR VALUES) ======
+const SUPABASE_URL = "PASTE_SUPABASE_PROJECT_URL_HERE";
+const SUPABASE_ANON_KEY = "PASTE_SUPABASE_ANON_PUBLIC_KEY_HERE";
 
 function fileNames(inputEl) {
   if (!inputEl || !inputEl.files) return [];
-  return Array.from(inputEl.files).map((f) => f.name);
+  return Array.from(inputEl.files).map(f => f.name);
 }
 
-document.addEventListener("DOMContentLoaded", function () {
+async function supabaseInsertApplication(payload) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/applications`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "apikey": SUPABASE_ANON_KEY,
+      "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+      "Prefer": "return=minimal"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(txt || "Failed to save application to database.");
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("driverForm");
   if (!form) return;
 
-  form.addEventListener("submit", function (e) {
+  form.addEventListener("submit", async (e) => {
     e.preventDefault();
 
-    // Collect form fields
-    const data = {
-      id: "APP-" + Date.now(),
+    const payload = {
+      app_id: "APP-" + Date.now(),
       status: "New",
-      submittedAt: new Date().toISOString(),
-      fullName: form.fullName?.value?.trim() || "",
+      full_name: form.fullName?.value?.trim() || "",
       phone: form.phone?.value?.trim() || "",
       email: form.email?.value?.trim() || "",
       address: form.address?.value?.trim() || "",
-      cdlNumber: form.cdlNumber?.value?.trim() || "",
-      cdlState: form.cdlState?.value?.trim() || "",
-      cdlExp: form.cdlExp?.value || "",
-      medCard: form.medCard?.value || "",
+      cdl_number: form.cdlNumber?.value?.trim() || "",
+      cdl_state: form.cdlState?.value?.trim() || "",
+      cdl_exp: form.cdlExp?.value || null,
+      med_card_exp: form.medCard?.value || null,
       uploads: {
         cdl: fileNames(form.querySelector('input[name="uploadCDL"]')),
         med: fileNames(form.querySelector('input[name="uploadMedical"]')),
       },
+      submitted_at: new Date().toISOString()
     };
 
-    // Save to dashboard list
-    const apps = getApps();
-    apps.unshift(data);
-    saveApps(apps);
-
-    alert("Submitted! Your application is now in the Hiring Dashboard.");
-
-    // Optional: clear form
-    form.reset();
-
-    // Go to dashboard
-    window.location.href = "dashboard.html";
+    try {
+      await supabaseInsertApplication(payload);
+      alert("Submitted! MitchPath received your application.");
+      form.reset();
+      window.location.href = "dashboard.html";
+    } catch (err) {
+      alert("Submission failed: " + err.message);
+    }
   });
 });
