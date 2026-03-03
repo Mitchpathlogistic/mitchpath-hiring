@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>MitchPath Logistic LLC — Hiring Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <div class="page">
+
+    <header class="header">
+      <div class="brand">
+        <img src="assets/logo.png" alt="MitchPath Logistic LLC Logo" class="logo" />
+        <div class="brand-text">
+          <div class="company">MITCHPATH LOGISTIC LLC</div>
+          <div class="doc-title">HIRING DASHBOARD — CDL APPLICATIONS</div>
+          <div class="sub-title">Local dashboard (this computer)</div>
+        </div>
+      </div>
+    </header>
+
+    <section class="card">
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between;">
+        <div>
+          <h2 style="margin:0;">Applications</h2>
+          <p class="muted" style="margin-top:6px;">Click “View” to open details. Approve/Deny updates status.</p>
+        </div>
+
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+          <input id="search" type="text" placeholder="Search name, phone, CDL..." style="min-width:260px;">
+          <a class="btn" href="index.html">Back to Application</a>
+          <button class="btn secondary" id="clearAll">Clear All</button>
+        </div>
+      </div>
+
+      <div id="tableWrap" style="margin-top:12px;"></div>
+    </section>
+
+    <section class="card" id="detailCard" style="display:none;">
+      <h2 style="margin-top:0;">Application Details</h2>
+      <div id="details"></div>
+
+      <div class="actions" style="margin-top:14px;">
+        <button class="btn secondary" id="closeDetails">Close</button>
+      </div>
+    </section>
+
+  </div>
+
+  <script>
+    const STORAGE_KEY = "mitchpath_cdl_applications_v1";
+
+    function getApps() {
+      try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+      catch { return []; }
+    }
+    function saveApps(apps) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(apps));
+    }
+
+    function fmtDate(iso) {
+      if (!iso) return "-";
+      try { return new Date(iso).toLocaleString(); } catch { return iso; }
+    }
+
+    function escapeHtml(s){
+      return String(s ?? "")
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;");
+    }
+
+    function renderTable(filter="") {
+      const apps = getApps();
+      const q = filter.trim().toLowerCase();
+      const filtered = q
+        ? apps.filter(a =>
+            (a.fullName||"").toLowerCase().includes(q) ||
+            (a.phone||"").toLowerCase().includes(q) ||
+            (a.cdlNumber||"").toLowerCase().includes(q) ||
+            (a.status||"").toLowerCase().includes(q)
+          )
+        : apps;
+
+      const wrap = document.getElementById("tableWrap");
+
+      if (!filtered.length) {
+        wrap.innerHTML = "<p class='muted'>No applications found.</p>";
+        return;
+      }
+
+      const rows = filtered.map(a => `
+        <tr>
+          <td>${escapeHtml(a.status)}</td>
+          <td>${escapeHtml(a.fullName)}</td>
+          <td>${escapeHtml(a.phone)}</td>
+          <td>${escapeHtml(a.cdlNumber)}</td>
+          <td>${escapeHtml(a.cdlState)}</td>
+          <td>${escapeHtml(a.cdlExp)}</td>
+          <td class="muted">${escapeHtml(fmtDate(a.submittedAt))}</td>
+          <td style="white-space:nowrap;">
+            <button class="btn secondary" onclick="viewApp('${a.id}')">View</button>
+            <button class="btn" onclick="setStatus('${a.id}','Approved')">Approve</button>
+            <button class="btn" onclick="setStatus('${a.id}','Denied')">Deny</button>
+          </td>
+        </tr>
+      `).join("");
+
+      wrap.innerHTML = `
+        <div style="overflow:auto;">
+          <table style="width:100%; border-collapse:collapse;">
+            <thead>
+              <tr style="text-align:left;">
+                <th style="padding:10px; border-bottom:1px solid #ddd;">Status</th>
+                <th style="padding:10px; border-bottom:1px solid #ddd;">Name</th>
+                <th style="padding:10px; border-bottom:1px solid #ddd;">Phone</th>
+                <th style="padding:10px; border-bottom:1px solid #ddd;">CDL #</th>
+                <th style="padding:10px; border-bottom:1px solid #ddd;">State</th>
+                <th style="padding:10px; border-bottom:1px solid #ddd;">CDL Exp</th>
+                <th style="padding:10px; border-bottom:1px solid #ddd;">Submitted</th>
+                <th style="padding:10px; border-bottom:1px solid #ddd;">Actions</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    window.setStatus = function(id, status){
+      const apps = getApps();
+      const idx = apps.findIndex(a => a.id === id);
+      if (idx === -1) return;
+      apps[idx].status = status;
+      saveApps(apps);
+      renderTable(document.getElementById("search").value);
+    }
+
+    window.viewApp = function(id){
+      const apps = getApps();
+      const a = apps.find(x => x.id === id);
+      if (!a) return;
+
+      const uploads = a.uploads || {};
+      const cdlFiles = (uploads.cdl || []).join(", ") || "None";
+      const medFiles = (uploads.med || []).join(", ") || "None";
+
+      document.getElementById("details").innerHTML = `
+        <div class="box">
+          <div><strong>Status:</strong> ${escapeHtml(a.status)}</div>
+          <div><strong>Application ID:</strong> ${escapeHtml(a.id)}</div>
+          <div><strong>Submitted:</strong> ${escapeHtml(fmtDate(a.submittedAt))}</div>
+        </div>
+
+        <div class="box" style="margin-top:12px;">
+          <h3 style="margin-top:0;">Applicant</h3>
+          <div><strong>Name:</strong> ${escapeHtml(a.fullName)}</div>
+          <div><strong>Phone:</strong> ${escapeHtml(a.phone)}</div>
+          <div><strong>Email:</strong> ${escapeHtml(a.email)}</div>
+          <div><strong>Address:</strong> ${escapeHtml(a.address)}</div>
+        </div>
+
+        <div class="box" style="margin-top:12px;">
+          <h3 style="margin-top:0;">CDL</h3>
+          <div><strong>CDL #:</strong> ${escapeHtml(a.cdlNumber)}</div>
+          <div><strong>State:</strong> ${escapeHtml(a.cdlState)}</div>
+          <div><strong>Expiration:</strong> ${escapeHtml(a.cdlExp)}</div>
+        </div>
+
+        <div class="box" style="margin-top:12px;">
+          <h3 style="margin-top:0;">Medical</h3>
+          <div><strong>Med Card Exp:</strong> ${escapeHtml(a.medCard)}</div>
+        </div>
+
+        <div class="box" style="margin-top:12px;">
+          <h3 style="margin-top:0;">Uploads (file names)</h3>
+          <div><strong>CDL Upload:</strong> ${escapeHtml(cdlFiles)}</div>
+          <div><strong>Medical Upload:</strong> ${escapeHtml(medFiles)}</div>
+          <p class="muted" style="margin-top:8px;">
+            Note: In a “no server” setup, we can store file names. For real document storage, we’ll connect an online backend.
+          </p>
+        </div>
+      `;
+
+      document.getElementById("detailCard").style.display = "block";
+      window.scrollTo({ top: document.getElementById("detailCard").offsetTop - 10, behavior: "smooth" });
+    }
+
+    // Search + clear
+    document.getElementById("search").addEventListener("input", (e) => renderTable(e.target.value));
+
+    document.getElementById("clearAll").addEventListener("click", () => {
+      const ok = confirm("Clear ALL saved applications on this computer?");
+      if (!ok) return;
+      localStorage.removeItem(STORAGE_KEY);
+      renderTable(document.getElementById("search").value);
+      document.getElementById("detailCard").style.display = "none";
+    });
+
+    document.getElementById("closeDetails").addEventListener("click", () => {
+      document.getElementById("detailCard").style.display = "none";
+    });
+
+    // Initial
+    renderTable();
+  </script>
+</body>
+</html>
