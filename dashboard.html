@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!DOCTYPE html>https://twqxxqsjcakcrtsupwfe.supabase.co
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -8,15 +8,24 @@
 </head>
 
 <body>
-  <div class="page">
+  <nav class="topnav">
+    <div class="topnav-left">
+      <span class="brand-dot"></span>
+      <span class="appname">MitchPath Careers</span>
+    </div>
+    <div class="topnav-right">
+      <a class="navbtn" href="index.html">Back to Apply</a>
+    </div>
+  </nav>
 
+  <div class="page">
     <header class="header">
       <div class="brand">
-        <img src="assets/logo.png" alt="MitchPath Logistic LLC Logo" class="logo" />
+        <img src="logo.png" alt="MitchPath Logistic LLC Logo" class="logo" />
         <div class="brand-text">
           <div class="company">MITCHPATH LOGISTIC LLC</div>
           <div class="doc-title">HIRING DASHBOARD — CDL APPLICATIONS</div>
-          <div class="sub-title">Local dashboard (this computer)</div>
+          <div class="sub-title">Live inbox (Supabase database)</div>
         </div>
       </div>
     </header>
@@ -25,13 +34,12 @@
       <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between;">
         <div>
           <h2 style="margin:0;">Applications</h2>
-          <p class="muted" style="margin-top:6px;">Click “View” to open details. Approve/Deny updates status.</p>
+          <p class="muted" style="margin-top:6px;">Search, view, approve or deny.</p>
         </div>
 
         <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
           <input id="search" type="text" placeholder="Search name, phone, CDL..." style="min-width:260px;">
-          <a class="btn" href="index.html">Back to Application</a>
-          <button class="btn secondary" id="clearAll">Clear All</button>
+          <button class="btn secondary" id="refreshBtn" type="button">Refresh</button>
         </div>
       </div>
 
@@ -43,21 +51,39 @@
       <div id="details"></div>
 
       <div class="actions" style="margin-top:14px;">
-        <button class="btn secondary" id="closeDetails">Close</button>
+        <button class="btn secondary" id="closeDetails" type="button">Close</button>
       </div>
     </section>
-
   </div>
 
   <script>
-    const STORAGE_KEY = "mitchpath_cdl_applications_v1";
+    // ====== SUPABASE SETTINGS (PASTE YOUR VALUES) ======
+    const SUPABASE_URL = "PASTE_SUPABASE_PROJECT_URL_HERE";
+    const SUPABASE_ANON_KEY = "PASTE_SUPABASE_ANON_PUBLIC_KEY_HERE";
 
-    function getApps() {
-      try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
-      catch { return []; }
+    async function supabaseSelectApps() {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/applications?select=*&order=submitted_at.desc`, {
+        headers: {
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+        }
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return await res.json();
     }
-    function saveApps(apps) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(apps));
+
+    async function supabaseUpdateStatus(app_id, status) {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/applications?app_id=eq.${encodeURIComponent(app_id)}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+          "Prefer": "return=minimal"
+        },
+        body: JSON.stringify({ status })
+      });
+      if (!res.ok) throw new Error(await res.text());
     }
 
     function fmtDate(iso) {
@@ -73,17 +99,18 @@
         .replaceAll('"',"&quot;");
     }
 
+    let ALL_APPS = [];
+
     function renderTable(filter="") {
-      const apps = getApps();
       const q = filter.trim().toLowerCase();
       const filtered = q
-        ? apps.filter(a =>
-            (a.fullName||"").toLowerCase().includes(q) ||
+        ? ALL_APPS.filter(a =>
+            (a.full_name||"").toLowerCase().includes(q) ||
             (a.phone||"").toLowerCase().includes(q) ||
-            (a.cdlNumber||"").toLowerCase().includes(q) ||
+            (a.cdl_number||"").toLowerCase().includes(q) ||
             (a.status||"").toLowerCase().includes(q)
           )
-        : apps;
+        : ALL_APPS;
 
       const wrap = document.getElementById("tableWrap");
 
@@ -95,16 +122,16 @@
       const rows = filtered.map(a => `
         <tr>
           <td>${escapeHtml(a.status)}</td>
-          <td>${escapeHtml(a.fullName)}</td>
-          <td>${escapeHtml(a.phone)}</td>
-          <td>${escapeHtml(a.cdlNumber)}</td>
-          <td>${escapeHtml(a.cdlState)}</td>
-          <td>${escapeHtml(a.cdlExp)}</td>
-          <td class="muted">${escapeHtml(fmtDate(a.submittedAt))}</td>
+          <td>${escapeHtml(a.full_name || "")}</td>
+          <td>${escapeHtml(a.phone || "")}</td>
+          <td>${escapeHtml(a.cdl_number || "")}</td>
+          <td>${escapeHtml(a.cdl_state || "")}</td>
+          <td>${escapeHtml(a.cdl_exp || "")}</td>
+          <td class="muted">${escapeHtml(fmtDate(a.submitted_at))}</td>
           <td style="white-space:nowrap;">
-            <button class="btn secondary" onclick="viewApp('${a.id}')">View</button>
-            <button class="btn" onclick="setStatus('${a.id}','Approved')">Approve</button>
-            <button class="btn" onclick="setStatus('${a.id}','Denied')">Deny</button>
+            <button class="btn secondary" type="button" onclick="viewApp('${escapeHtml(a.app_id)}')">View</button>
+            <button class="btn" type="button" onclick="setStatus('${escapeHtml(a.app_id)}','Approved')">Approve</button>
+            <button class="btn" type="button" onclick="setStatus('${escapeHtml(a.app_id)}','Denied')">Deny</button>
           </td>
         </tr>
       `).join("");
@@ -130,18 +157,18 @@
       `;
     }
 
-    window.setStatus = function(id, status){
-      const apps = getApps();
-      const idx = apps.findIndex(a => a.id === id);
-      if (idx === -1) return;
-      apps[idx].status = status;
-      saveApps(apps);
-      renderTable(document.getElementById("search").value);
+    window.setStatus = async function(app_id, status){
+      try {
+        await supabaseUpdateStatus(app_id, status);
+        await loadApps();
+        renderTable(document.getElementById("search").value);
+      } catch (e) {
+        alert("Status update failed: " + e.message);
+      }
     }
 
-    window.viewApp = function(id){
-      const apps = getApps();
-      const a = apps.find(x => x.id === id);
+    window.viewApp = function(app_id){
+      const a = ALL_APPS.find(x => x.app_id === app_id);
       if (!a) return;
 
       const uploads = a.uploads || {};
@@ -151,13 +178,13 @@
       document.getElementById("details").innerHTML = `
         <div class="box">
           <div><strong>Status:</strong> ${escapeHtml(a.status)}</div>
-          <div><strong>Application ID:</strong> ${escapeHtml(a.id)}</div>
-          <div><strong>Submitted:</strong> ${escapeHtml(fmtDate(a.submittedAt))}</div>
+          <div><strong>Application ID:</strong> ${escapeHtml(a.app_id)}</div>
+          <div><strong>Submitted:</strong> ${escapeHtml(fmtDate(a.submitted_at))}</div>
         </div>
 
         <div class="box" style="margin-top:12px;">
           <h3 style="margin-top:0;">Applicant</h3>
-          <div><strong>Name:</strong> ${escapeHtml(a.fullName)}</div>
+          <div><strong>Name:</strong> ${escapeHtml(a.full_name)}</div>
           <div><strong>Phone:</strong> ${escapeHtml(a.phone)}</div>
           <div><strong>Email:</strong> ${escapeHtml(a.email)}</div>
           <div><strong>Address:</strong> ${escapeHtml(a.address)}</div>
@@ -165,14 +192,14 @@
 
         <div class="box" style="margin-top:12px;">
           <h3 style="margin-top:0;">CDL</h3>
-          <div><strong>CDL #:</strong> ${escapeHtml(a.cdlNumber)}</div>
-          <div><strong>State:</strong> ${escapeHtml(a.cdlState)}</div>
-          <div><strong>Expiration:</strong> ${escapeHtml(a.cdlExp)}</div>
+          <div><strong>CDL #:</strong> ${escapeHtml(a.cdl_number)}</div>
+          <div><strong>State:</strong> ${escapeHtml(a.cdl_state)}</div>
+          <div><strong>Expiration:</strong> ${escapeHtml(a.cdl_exp)}</div>
         </div>
 
         <div class="box" style="margin-top:12px;">
           <h3 style="margin-top:0;">Medical</h3>
-          <div><strong>Med Card Exp:</strong> ${escapeHtml(a.medCard)}</div>
+          <div><strong>Med Card Exp:</strong> ${escapeHtml(a.med_card_exp)}</div>
         </div>
 
         <div class="box" style="margin-top:12px;">
@@ -180,7 +207,7 @@
           <div><strong>CDL Upload:</strong> ${escapeHtml(cdlFiles)}</div>
           <div><strong>Medical Upload:</strong> ${escapeHtml(medFiles)}</div>
           <p class="muted" style="margin-top:8px;">
-            Note: In a “no server” setup, we can store file names. For real document storage, we’ll connect an online backend.
+            Next step: store actual files using Supabase Storage.
           </p>
         </div>
       `;
@@ -189,23 +216,34 @@
       window.scrollTo({ top: document.getElementById("detailCard").offsetTop - 10, behavior: "smooth" });
     }
 
-    // Search + clear
-    document.getElementById("search").addEventListener("input", (e) => renderTable(e.target.value));
+    async function loadApps(){
+      ALL_APPS = await supabaseSelectApps();
+    }
 
-    document.getElementById("clearAll").addEventListener("click", () => {
-      const ok = confirm("Clear ALL saved applications on this computer?");
-      if (!ok) return;
-      localStorage.removeItem(STORAGE_KEY);
-      renderTable(document.getElementById("search").value);
-      document.getElementById("detailCard").style.display = "none";
+    document.getElementById("search").addEventListener("input", (e) => renderTable(e.target.value));
+    document.getElementById("refreshBtn").addEventListener("click", async () => {
+      try {
+        await loadApps();
+        renderTable(document.getElementById("search").value);
+      } catch (e) {
+        alert("Refresh failed: " + e.message);
+      }
     });
 
     document.getElementById("closeDetails").addEventListener("click", () => {
       document.getElementById("detailCard").style.display = "none";
     });
 
-    // Initial
-    renderTable();
+    (async function init(){
+      try {
+        await loadApps();
+        renderTable();
+      } catch (e) {
+        document.getElementById("tableWrap").innerHTML =
+          "<p class='muted'>Dashboard could not load applications. Check your Supabase URL/Key and RLS policies.</p>";
+        alert("Dashboard load failed: " + e.message);
+      }
+    })();
   </script>
 </body>
 </html>
